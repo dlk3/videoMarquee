@@ -1,0 +1,63 @@
+#!/usr/bin/env sh
+
+set -e
+
+#  Create an horizontally scrolling text marquee video.
+#  Inputs are the text string and the name of the video file to be output.
+
+#  Full width of the browser window, 2160 = 4K screen in portrait orientation.
+WINDOW_WIDTH=2160
+
+#  Background color for the marquee, see https://imagemagick.org/script/color.php
+#BACKGROUND_COLOR="transparent"
+BACKGROUND_COLOR="red"
+
+#  Color, font and size of marquee text
+FILL_COLOR="white"
+FONT="Arial"
+FONT_SIZE="48"
+
+#  Video is generated at 59.94 frames/second.  This variable controls
+#  how many pixels/frame the text scolls.
+SPEED=2
+
+TEXT="$1"
+VIDEO_FILE="$2"
+
+#  My test text string, a noaa.gov weather alert ...
+if [ "$TEXT" == "" ]; then
+	TEXT="...The flood warning continues for the following rivers in Southwest Lower Michigan... Grand River near Comstock Park affecting Kent County Grand River at Robinson Township affecting Ottawa County .The crest on the Grand River passed Robinson Township last night. The drop in water levels behind the crest will be very slow, and minor flooding will continue for a couple more days. No significant rain or snow is expected over the next several days which will allow the rivers to continue falling through this week. The following forecast is based on observed and forecast 48 hour precipitation. The Flood Warning continues for the Grand River near Comstock Park. * until Tuesday morning. * at 8:58 AM Sunday the stage was 12.6 feet. * Flood stage is 12.0 feet. * Minor Flooding is occurring and Minor Flooding is forecast. * Forecast, the river will continue to fall below flood stage by tomorrow morning. * Impact, at 13.0 feet...Abrigador Trail is underwater and minor flooding of homes occurs along Abrigador Trail and Willow Drive. * Flood history, this crest compares to a previous crest of 12.8 feet on Mar 20 2014. &&"
+fi
+
+if [[ "$TEXT" == "" || "$VIDEO_FILE" == "" ]]; then
+	echo "USAGE: $(basename "$0") \"marquee text string\" output_file_name.mp4" 
+	exit 1
+fi
+
+TMPDIR=$(mktemp -d)
+
+#  Create a single image containing the text string, padded left and
+#  right with blank space.
+convert -background $BACKGROUND_COLOR -fill $FILL_COLOR -font $FONT -pointsize $FONT_SIZE label:"$TEXT" ${TMPDIR}/temp.jpg
+WW=$(( $WINDOW_WIDTH * 2 ))
+convert -background $BACKGROUND_COLOR -fill $FILL_COLOR -font $FONT -pointsize $FONT_SIZE -extent $(identify -format "%[fx:W+${WW}]x%H" ${TMPDIR}/temp.jpg) -gravity Center label:"$TEXT" ${TMPDIR}/marquee.jpg
+
+#  Crop the single image into a series of images that represent the
+#  individual frames of the video with the text scrolling right to left 
+IMAGE_WIDTH=$(identify -format "%W" ${TMPDIR}/marquee.jpg)
+IMAGE_HEIGHT=$(identify -format "%H" ${TMPDIR}/marquee.jpg)
+LEFT_EDGE=0
+CTR=0
+echo "Generating $(( ($IMAGE_WIDTH - $WINOOW_WIDTH) / $SPEED )) video frame images, this will take a while ..."
+while [ $(( $LEFT_EDGE + $WINDOW_WIDTH )) -le $IMAGE_WIDTH ]; do
+	echo -e -n "\r$CTR "
+	convert ${TMPDIR}/marquee.jpg -crop ${WINDOW_WIDTH}x$IMAGE_HEIGHT+$LEFT_EDGE+0 +repage ${TMPDIR}/marquee$(printf "%06d" $CTR).jpg
+	CTR=$(( $CTR + 1 ))
+	LEFT_EDGE=$(( $LEFT_EDGE + $SPEED ))
+done
+echo
+
+#  Generate a MP4 video file from the series of images
+ffmpeg -hide_banner -framerate 60000/1001 -f image2 -pattern_type glob -i "${TMPDIR}/marquee0*.jpg" -c:v libx264 -an -f mp4 "$VIDEO_FILE"
+
+rm -fr $TMPDIR
