@@ -35,6 +35,7 @@ if [[ "$TEXT" == "" || "$VIDEO_FILE" == "" ]]; then
 fi
 
 TMPDIR=$(mktemp -d)
+trap "rm -fr $TMPDIR" EXIT   #  Always erase the tmpdir, no matter what
 
 #  Create a single image containing the text string, padded left and
 #  right with blank space.
@@ -48,7 +49,7 @@ IMAGE_WIDTH=$(identify -format "%W" ${TMPDIR}/marquee.jpg)
 IMAGE_HEIGHT=$(identify -format "%H" ${TMPDIR}/marquee.jpg)
 LEFT_EDGE=0
 CTR=0
-echo "Generating $(( ($IMAGE_WIDTH - $WINOOW_WIDTH) / $SPEED )) video frame images, this will take a while ..."
+echo "Generating $(( ($IMAGE_WIDTH - ${WINDOW_WIDTH}) / $SPEED )) video frame images, this will take a while ..."
 while [ $(( $LEFT_EDGE + $WINDOW_WIDTH )) -le $IMAGE_WIDTH ]; do
 	echo -e -n "\r$CTR "
 	convert ${TMPDIR}/marquee.jpg -crop ${WINDOW_WIDTH}x$IMAGE_HEIGHT+$LEFT_EDGE+0 +repage ${TMPDIR}/marquee$(printf "%06d" $CTR).jpg
@@ -60,4 +61,4 @@ echo
 #  Generate a MP4 video file from the series of images
 ffmpeg -hide_banner -framerate 60000/1001 -f image2 -pattern_type glob -i "${TMPDIR}/marquee0*.jpg" -c:v libx264 -an -f mp4 "$VIDEO_FILE"
 
-rm -fr $TMPDIR
+
